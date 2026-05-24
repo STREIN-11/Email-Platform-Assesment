@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trigger, Template, Condition } from "@/types";
 import ConditionBuilder from "@/components/ConditionBuilder";
-import { ArrowLeft, Save, CheckCircle2, AlertCircle, Zap, SlidersHorizontal, ShieldCheck, Info } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Zap, SlidersHorizontal, ShieldCheck, Info, Calendar } from "lucide-react";
 
 // ─── Preset events a non-technical user can pick from ────────────────────────
 const EVENT_OPTIONS = [
@@ -21,6 +21,7 @@ const EVENT_OPTIONS = [
 
 const EMPTY: Partial<Trigger> = {
   name: "", event_name: "", template_id: "", conditions: [], once_per_user: true, active: true,
+  scheduled_for: null, schedule_timezone: "UTC",
 };
 
 type Toast = { type: "success" | "error"; msg: string } | null;
@@ -38,6 +39,34 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
 
   const set = (k: keyof Trigger, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Convert a datetime-local string ("YYYY-MM-DDTHH:mm") + IANA timezone → UTC ISO string
+  function toUTC(localDt: string, tz: string): string {
+    // Parse as if it's in the given timezone by formatting a known UTC date and finding the offset
+    const [datePart, timePart] = localDt.split("T");
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hour, minute] = timePart.split(":").map(Number);
+    // Use Intl to find what UTC time corresponds to this local time in the given tz
+    const approx = new Date(Date.UTC(year, month - 1, day, hour, minute));
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(approx).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
+    const tzLocal = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute));
+    const offset = tzLocal.getTime() - approx.getTime();
+    return new Date(approx.getTime() - offset).toISOString();
+  }
+
+  // Convert a UTC ISO string back to "YYYY-MM-DDTHH:mm" in the given timezone (for the input value)
+  function fromUTC(utcIso: string, tz: string): string {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(utcIso)).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}`;
+  }
+
   function showToast(type: "success" | "error", msg: string) {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3500);
@@ -47,10 +76,15 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
     setSaving(true);
     const method = initial ? "PUT" : "POST";
     const url = initial ? `/api/triggers/${initial.id}` : "/api/triggers";
+    const tz = form.schedule_timezone ?? "UTC";
+    const payload = {
+      ...form,
+      scheduled_for: form.scheduled_for ? toUTC(form.scheduled_for.slice(0, 16), tz) : null,
+    };
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     setSaving(false);
     if (res.ok) {
@@ -109,6 +143,16 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
         <ConditionBuilder
           conditions={form.conditions ?? []}
           onChange={(c: Condition[]) => set("conditions", c)}
+        />
+      </Section>
+
+      {/* Section: Schedule */}
+      <Section icon={<Calendar size={14} className="text-violet-500" />} title="Schedule (Optional)" desc="Send this email at a specific date and time instead of immediately.">
+        <SchedulePicker
+          value={form.scheduled_for ? fromUTC(form.scheduled_for, form.schedule_timezone ?? "UTC") : null}
+          timezone={form.schedule_timezone ?? "UTC"}
+          onChangeDate={(v) => set("scheduled_for", v)}
+          onChangeTimezone={(v) => set("schedule_timezone", v)}
         />
       </Section>
 
@@ -239,5 +283,92 @@ function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange
         <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? "translate-x-4" : ""}`} />
       </div>
     </label>
+  );
+}
+
+const TIMEZONES = [
+  "UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Kolkata", "Asia/Singapore",
+  "Asia/Tokyo", "Australia/Sydney",
+];
+
+function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
+  value: string | null;
+  timezone: string;
+  onChangeDate: (v: string | null) => void;
+  onChangeTimezone: (v: string) => void;
+}) {
+  const enabled = !!value;
+
+  return (
+    <div className="space-y-4">
+      {/* Toggle */}
+      <label className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50/50 cursor-pointer hover:bg-gray-50 transition-colors">
+        <div>
+          <p className="text-sm font-medium text-gray-800">Schedule for a specific date & time</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {enabled
+              ? "Email will be queued and sent at the chosen time"
+              : "Off — email sends immediately when the event fires"}
+          </p>
+        </div>
+        <div
+          onClick={() => onChangeDate(enabled ? null : new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16))}
+          className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ml-4 ${enabled ? "bg-violet-500" : "bg-gray-200"}`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? "translate-x-4" : ""}`} />
+        </div>
+      </label>
+
+      {/* Date/time + timezone pickers */}
+      {enabled && (
+        <div className="space-y-3 pl-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Send on</label>
+              <input
+                type="datetime-local"
+                className="w-full border border-violet-200 bg-violet-50 text-violet-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition"
+                value={value?.slice(0, 16) ?? ""}
+                min={new Date().toISOString().slice(0, 16)}
+                onChange={(e) => onChangeDate(e.target.value || null)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Timezone</label>
+              <select
+                className="w-full border border-violet-200 bg-violet-50 text-violet-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition"
+                value={timezone}
+                onChange={(e) => onChangeTimezone(e.target.value)}
+              >
+                {TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz.replace("_", " ")}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Confirmation */}
+          {value && (
+            <div className="flex items-start gap-2 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
+              <Calendar size={14} className="text-violet-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-violet-700">
+                This email will be <strong>queued</strong> when the event fires, then delivered on{" "}
+                <strong>
+                  {value.slice(0, 16).replace("T", " at ").replace(/:(\d{2})$/, (_, m) => {
+                    const [h, min] = value.slice(11, 16).split(":").map(Number);
+                    const ampm = h >= 12 ? "PM" : "AM";
+                    const h12 = h % 12 || 12;
+                    return `:${String(min).padStart(2, "0")} ${ampm}`;
+                  }).replace(/^(\d{4})-(\d{2})-(\d{2})/, (_, y, mo, d) =>
+                    new Date(+y, +mo - 1, +d).toLocaleDateString("en-US", { dateStyle: "full" })
+                  )}
+                </strong>{" "}({timezone}).
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

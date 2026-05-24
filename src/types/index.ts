@@ -12,7 +12,7 @@ export type Template = {
 
 export type Condition = {
   field: string;
-  operator: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "not_contains";
+  operator: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "not_contains" | "date_after" | "date_before" | "date_after_days" | "date_before_days";
   value: string | number | boolean;
 };
 
@@ -24,9 +24,28 @@ export type Trigger = {
   conditions: Condition[];
   once_per_user: boolean;
   active: boolean;
+  scheduled_for: string | null;
+  schedule_timezone: string;
   created_at: string;
   updated_at: string;
   templates?: Template;
+};
+
+export type ScheduledSend = {
+  id: string;
+  trigger_id: string;
+  template_id: string;
+  event_id: string | null;
+  user_id: string;
+  recipient_email: string;
+  rendered_subject: string;
+  rendered_html: string;
+  send_at: string;
+  status: "pending" | "sent" | "failed" | "cancelled";
+  error: string | null;
+  created_at: string;
+  sent_at: string | null;
+  triggers?: { name: string };
 };
 
 export type IncomingEvent = {

@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutTemplate, Zap, FlaskConical, Mail } from "lucide-react";
+import { LayoutTemplate, Zap, FlaskConical, Mail, Calendar } from "lucide-react";
 
 const NAV = [
-  { href: "/templates", label: "Templates", icon: LayoutTemplate },
-  { href: "/triggers", label: "Triggers", icon: Zap },
-  { href: "/playground", label: "Playground", icon: FlaskConical },
+  { href: "/templates", label: "Templates",  icon: LayoutTemplate },
+  { href: "/triggers",  label: "Triggers",   icon: Zap },
+  { href: "/scheduled", label: "Scheduled",  icon: Calendar },
+  { href: "/playground",label: "Playground", icon: FlaskConical },
 ];
 
 export default function Sidebar() {

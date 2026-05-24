@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Play, RotateCcw, CheckCircle2, XCircle, Clock, Info, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Play, RotateCcw, CheckCircle2, XCircle, Clock, Info, ChevronDown, ChevronUp, RefreshCw, CalendarClock } from "lucide-react";
 
 // Default sample values for common field names
 const FIELD_DEFAULTS: Record<string, string> = {
@@ -20,14 +20,13 @@ type TriggerOption = {
   template: string;     // template name
 };
 
-type ResultRow = { trigger: string; status: string; reason?: string };
+type ResultRow = { trigger: string; status: string; reason?: string; send_at?: string };
 type EngineResult = { event_id: string; results: ResultRow[]; matched?: number } | null;
 
 const REASON_LABELS: Record<string, string> = {
-  conditions_not_met: "The conditions on this trigger didn't match",
-  already_sent:       "Already sent to this user before",
-  unsubscribed:       "User has unsubscribed from emails",
-  no_email:           "No email address was provided",
+  already_sent: "Already sent to this user before",
+  unsubscribed:  "User has unsubscribed from emails",
+  no_email:      "No email address was provided",
 };
 
 export default function PlaygroundPage() {
@@ -336,9 +335,10 @@ export default function PlaygroundPage() {
                   <div className="space-y-2">
                     {result.results.map((r, i) => (
                       <div key={i} className={`rounded-xl border p-4 ${
-                        r.status === "sent"   ? "bg-emerald-50 border-emerald-100" :
-                        r.status === "failed" ? "bg-red-50 border-red-100" :
-                                                "bg-gray-50 border-gray-100"
+                        r.status === "sent"      ? "bg-emerald-50 border-emerald-100" :
+                        r.status === "scheduled" ? "bg-violet-50 border-violet-100" :
+                        r.status === "failed"    ? "bg-red-50 border-red-100" :
+                                                   "bg-gray-50 border-gray-100"
                       }`}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -346,8 +346,10 @@ export default function PlaygroundPage() {
                             <p className="text-xs text-gray-500 mt-1">
                               {r.status === "sent"
                                 ? "✅ Email was sent successfully."
+                                : r.status === "scheduled"
+                                ? `🕐 Scheduled — will be sent on ${new Date(r.send_at!).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}.`
                                 : r.status === "failed"
-                                ? "❌ Something went wrong while sending."
+                                ? `❌ Something went wrong: ${r.reason ?? "unknown error"}`
                                 : `⏭ Skipped — ${REASON_LABELS[r.reason ?? ""] ?? r.reason ?? "no reason given"}.`}
                             </p>
                           </div>
@@ -410,6 +412,11 @@ function StatusBadge({ status }: { status: string }) {
   if (status === "sent") return (
     <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-full shrink-0">
       <CheckCircle2 size={11} /> Sent
+    </span>
+  );
+  if (status === "scheduled") return (
+    <span className="flex items-center gap-1.5 text-xs font-medium text-violet-700 bg-violet-100 border border-violet-200 px-2.5 py-1 rounded-full shrink-0">
+      <CalendarClock size={11} /> Scheduled
     </span>
   );
   if (status === "skipped") return (

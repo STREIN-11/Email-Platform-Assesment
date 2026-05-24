@@ -12,7 +12,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq("id", id)
     .select("*, templates(id, name, subject)")
     .single();
-  if (error) return NextResponse.json({ error: error.message, detail: error.details }, { status: 500 });
+  if (error) {
+    console.error("[PUT /api/triggers] Supabase error:", JSON.stringify(error, null, 2), "\nPayload:", JSON.stringify(fields, null, 2));
+    return NextResponse.json({ error: error.message, detail: error.details, hint: error.hint, code: error.code }, { status: 500 });
+  }
   return NextResponse.json(data);
 }
 
