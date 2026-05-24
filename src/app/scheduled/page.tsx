@@ -26,6 +26,7 @@ export default function ScheduledPage() {
     setLoading(true);
     const res = await fetch("/api/scheduled-sends");
     const data = await res.json();
+    if (!Array.isArray(data)) { console.error("[scheduled-sends] API error:", data); }
     setSends(Array.isArray(data) ? data : []);
     setLoading(false);
   }

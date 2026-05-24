@@ -11,7 +11,11 @@ export default function TriggersPage() {
   useEffect(() => {
     fetch("/api/triggers")
       .then((r) => r.json())
-      .then((d) => { setTriggers(Array.isArray(d) ? d : []); setLoading(false); });
+      .then((d) => {
+        if (!Array.isArray(d)) { console.error("[triggers] API error:", d); }
+        setTriggers(Array.isArray(d) ? d : []);
+        setLoading(false);
+      });
   }, []);
 
   async function del(id: string) {

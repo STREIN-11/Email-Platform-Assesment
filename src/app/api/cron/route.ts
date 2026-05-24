@@ -2,16 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/mailer";
 
-// Protect with a secret so only your scheduler can call this
 export async function POST(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret");
-  if (secret !== process.env.CRON_SECRET) {
+  const authHeader = req.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return runCron();
 }
 
-// Also allow GET so you can trigger manually from the browser during dev
 export async function GET() {
   return runCron();
 }
