@@ -3,7 +3,21 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trigger, Template, Condition } from "@/types";
 import ConditionBuilder from "@/components/ConditionBuilder";
-import { ArrowLeft, Save, CheckCircle2, AlertCircle, Zap, SlidersHorizontal, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Zap, SlidersHorizontal, ShieldCheck, Info } from "lucide-react";
+
+// ─── Preset events a non-technical user can pick from ────────────────────────
+const EVENT_OPTIONS = [
+  { value: "user.plan_upgraded",      label: "User upgrades their plan",           example: "When someone goes from Free → Pro" },
+  { value: "user.signed_up",          label: "New user signs up",                  example: "When someone creates an account" },
+  { value: "user.trial_started",      label: "User starts a free trial",           example: "When a trial period begins" },
+  { value: "user.trial_ended",        label: "Free trial ends",                    example: "When a trial expires" },
+  { value: "user.payment_failed",     label: "Payment fails",                      example: "When a charge is declined" },
+  { value: "user.subscription_cancelled", label: "User cancels their subscription", example: "When someone downgrades to free" },
+  { value: "user.storage_cap_hit",    label: "User hits their storage limit",      example: "When storage usage reaches 100%" },
+  { value: "user.inactive_14d",       label: "User inactive for 14 days",          example: "Re-engagement nudge" },
+  { value: "user.milestone_reached",  label: "User reaches a milestone",           example: "e.g. 100th project, 1 year anniversary" },
+  { value: "__custom__",              label: "Custom event…",                      example: "Type your own event name" },
+];
 
 const EMPTY: Partial<Trigger> = {
   name: "", event_name: "", template_id: "", conditions: [], once_per_user: true, active: true,
@@ -74,16 +88,15 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
       </div>
 
       {/* Section: Identity */}
-      <Section icon={<Zap size={14} className="text-amber-500" />} title="Trigger Identity" desc="Name this trigger and bind it to an event and template.">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Trigger Name">
-            <input className={INPUT} value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} placeholder="Welcome to Paid" />
-          </Field>
-          <Field label="Event Name" hint="Exact match against incoming event_name">
-            <input className={`${INPUT} mono`} value={form.event_name ?? ""} onChange={(e) => set("event_name", e.target.value)} placeholder="user.plan_upgraded" />
-          </Field>
-        </div>
-        <Field label="Template">
+      <Section icon={<Zap size={14} className="text-amber-500" />} title="Trigger Identity" desc="Give this trigger a name, choose what event starts it, and pick which email to send.">
+        <Field label="Trigger Name" hint="Internal label — only you see this">
+          <input className={INPUT} value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Welcome to Paid" />
+        </Field>
+        <EventPicker
+          value={form.event_name ?? ""}
+          onChange={(v) => set("event_name", v)}
+        />
+        <Field label="Which email should be sent?">
           <select className={INPUT} value={form.template_id ?? ""} onChange={(e) => set("template_id", e.target.value)}>
             <option value="">Select a template…</option>
             {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -121,6 +134,69 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
 }
 
 const INPUT = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 bg-white transition";
+
+function EventPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const isCustom = value !== "" && !EVENT_OPTIONS.slice(0, -1).find((e) => e.value === value);
+  const selected = EVENT_OPTIONS.find((e) => e.value === value);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline gap-2 mb-1.5">
+        <label className="text-sm font-medium text-gray-700">When does this email fire?</label>
+      </div>
+
+      {/* Preset cards */}
+      <div className="grid grid-cols-1 gap-1.5">
+        {EVENT_OPTIONS.map((opt) => {
+          const active = isCustom ? opt.value === "__custom__" : value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value === "__custom__" ? "" : opt.value)}
+              className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                active
+                  ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300"
+                  : "border-gray-100 bg-gray-50/50 hover:border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-sm font-medium ${active ? "text-indigo-700" : "text-gray-800"}`}>{opt.label}</span>
+                {active && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />}
+              </div>
+              <span className="text-xs text-gray-400 mt-0.5 block">{opt.example}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom input */}
+      {(isCustom || value === "") && (
+        <div className="pt-1">
+          <input
+            className={`${INPUT} mono`}
+            placeholder="e.g. order.shipped"
+            value={isCustom ? value : ""}
+            onChange={(e) => onChange(e.target.value)}
+            autoFocus
+          />
+          <p className="text-xs text-gray-400 mt-1">This must exactly match the event name your app sends.</p>
+        </div>
+      )}
+
+      {/* Live confirmation */}
+      {value && !isCustom && selected && selected.value !== "__custom__" && (
+        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5">
+          <Info size={13} className="text-indigo-400 shrink-0" />
+          <p className="text-xs text-indigo-700">
+            This trigger fires when: <strong>{selected.label.toLowerCase()}</strong>.
+            The system listens for the event code <code className="bg-indigo-100 px-1 rounded mono">{value}</code>.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Section({ icon, title, desc, children }: { icon: React.ReactNode; title: string; desc: string; children: React.ReactNode }) {
   return (

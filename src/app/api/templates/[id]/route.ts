@@ -11,13 +11,15 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
+  // Strip read-only fields before updating
+  const { id: _id, created_at: _c, ...fields } = body;
   const { data, error } = await supabaseAdmin
     .from("templates")
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update({ ...fields, updated_at: new Date().toISOString() })
     .eq("id", id)
     .select()
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: error.message, detail: error.details }, { status: 500 });
   return NextResponse.json(data);
 }
 

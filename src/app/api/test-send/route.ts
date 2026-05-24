@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { renderTemplate } from "@/lib/template-renderer";
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { sendEmail } from "@/lib/mailer";
 
 export async function POST(req: NextRequest) {
   const { template_id, to, sample_data = {} } = await req.json();
@@ -20,13 +18,11 @@ export async function POST(req: NextRequest) {
 
   const { html, subject } = renderTemplate(template.html_body, template.subject, sample_data);
 
-  const { data, error: sendErr } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
-    to,
-    subject: `[TEST] ${subject}`,
-    html,
-  });
-
-  if (sendErr) return NextResponse.json({ error: sendErr.message }, { status: 500 });
-  return NextResponse.json({ provider_id: data?.id });
+  try {
+    const messageId = await sendEmail({ to, subject: `[TEST] ${subject}`, html });
+    return NextResponse.json({ provider_id: messageId });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

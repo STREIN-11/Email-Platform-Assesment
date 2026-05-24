@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { evaluateConditions } from "@/lib/rule-engine";
 import { renderTemplate } from "@/lib/template-renderer";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/mailer";
 import { Trigger } from "@/types";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   if (!triggers?.length) {
     await supabaseAdmin.from("events").update({ processed: true }).eq("id", event.id);
-    return NextResponse.json({ matched: 0 });
+    return NextResponse.json({ event_id: event.id, results: [], matched: 0 });
   }
 
   // 3. Fetch user profile
@@ -53,7 +51,7 @@ export async function POST(req: NextRequest) {
     // 4. Evaluate conditions
     const conditionsMet = evaluateConditions(trigger.conditions, { ...payload, user: profile });
     if (!conditionsMet) {
-      results.push({ trigger_id: trigger.id, status: "skipped", reason: "conditions_not_met" });
+      results.push({ trigger_id: trigger.id, trigger: trigger.name, status: "skipped", reason: "conditions_not_met" });
       continue;
     }
 
@@ -64,7 +62,7 @@ export async function POST(req: NextRequest) {
         event_id: event.id, user_id, recipient_email: profile.email,
         status: "skipped", error: "unsubscribed",
       });
-      results.push({ trigger_id: trigger.id, status: "skipped", reason: "unsubscribed" });
+      results.push({ trigger_id: trigger.id, trigger: trigger.name, status: "skipped", reason: "unsubscribed" });
       continue;
     }
 
@@ -79,7 +77,7 @@ export async function POST(req: NextRequest) {
         .limit(1);
 
       if (existing?.length) {
-        results.push({ trigger_id: trigger.id, status: "skipped", reason: "already_sent" });
+        results.push({ trigger_id: trigger.id, trigger: trigger.name, status: "skipped", reason: "already_sent" });
         continue;
       }
     }
@@ -92,29 +90,35 @@ export async function POST(req: NextRequest) {
     });
 
     // 8. Send via Resend
+    const recipientEmail = (profile?.email ?? payload.email) as string | undefined;
+    // In development without a verified domain, Resend only allows sending to your own address.
+    // Set RESEND_DEV_OVERRIDE_EMAIL in .env.local to redirect all sends there.
+    const toAddress = process.env.RESEND_DEV_OVERRIDE_EMAIL ?? recipientEmail;
+
+    if (!recipientEmail) {
+      results.push({ trigger_id: trigger.id, status: "skipped", reason: "no_email" });
+      continue;
+    }
+
     try {
-      const { data: sent } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: profile?.email ?? payload.email as string,
-        subject,
-        html,
-      });
+      const messageId = await sendEmail({ to: toAddress!, subject, html });
 
       await supabaseAdmin.from("send_log").insert({
         trigger_id: trigger.id, template_id: trigger.template_id,
-        event_id: event.id, user_id, recipient_email: profile?.email,
-        status: "sent", provider_id: sent?.id,
+        event_id: event.id, user_id, recipient_email: recipientEmail,
+        status: "sent", provider_id: messageId,
       });
 
-      results.push({ trigger_id: trigger.id, status: "sent", provider_id: sent?.id });
+      results.push({ trigger_id: trigger.id, trigger: trigger.name, status: "sent", provider_id: messageId });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "unknown error";
+      console.error("[events] send error:", msg);
       await supabaseAdmin.from("send_log").insert({
         trigger_id: trigger.id, template_id: trigger.template_id,
-        event_id: event.id, user_id, recipient_email: profile?.email,
+        event_id: event.id, user_id, recipient_email: recipientEmail,
         status: "failed", error: msg,
       });
-      results.push({ trigger_id: trigger.id, status: "failed", error: msg });
+      results.push({ trigger_id: trigger.id, trigger: trigger.name, status: "failed", error: msg });
     }
   }
 

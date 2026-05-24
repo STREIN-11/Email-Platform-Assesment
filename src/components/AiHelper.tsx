@@ -24,6 +24,13 @@ export default function AiHelper({ currentHtml, currentSubject, onApplyHtml, onA
   const [extra, setExtra] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | string[] | null>(null);
+  const [applied, setApplied] = useState(false);
+
+  function applyHtml(html: string) {
+    onApplyHtml(html);
+    setApplied(true);
+    setTimeout(() => setApplied(false), 2000);
+  }
 
   async function run() {
     setLoading(true);
@@ -115,10 +122,14 @@ export default function AiHelper({ currentHtml, currentSubject, onApplyHtml, onA
                   <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
                     <span className="text-xs font-medium text-gray-500">Generated content</span>
                     <button
-                      onClick={() => onApplyHtml(result)}
-                      className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                      onClick={() => applyHtml(result as string)}
+                      className={`text-xs font-medium transition-colors ${
+                        applied
+                          ? "text-emerald-600"
+                          : "text-indigo-600 hover:text-indigo-700"
+                      }`}
                     >
-                      Apply to editor →
+                      {applied ? "✓ Applied!" : "Apply to editor →"}
                     </button>
                   </div>
                   <div
