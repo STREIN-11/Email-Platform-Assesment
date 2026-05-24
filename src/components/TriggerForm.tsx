@@ -23,6 +23,11 @@ const EMPTY: Partial<Trigger> = {
   scheduled_for: null, schedule_timezone: "UTC",
 };
 
+function normalizeInitial(t?: Trigger): Partial<Trigger> {
+  if (!t) return EMPTY;
+  return { ...t, scheduled_for: t.scheduled_for ?? null, schedule_timezone: t.schedule_timezone ?? "UTC" };
+}
+
 function toUTC(localDt: string, tz: string): string {
   const [datePart, timePart] = localDt.split("T");
   const [year, month, day] = datePart.split("-").map(Number);
@@ -60,7 +65,7 @@ type Toast = { type: "success" | "error"; msg: string } | null;
 
 export default function TriggerForm({ initial }: { initial?: Trigger }) {
   const router = useRouter();
-  const [form, setForm] = useState<Partial<Trigger>>(initial ?? EMPTY);
+  const [form, setForm] = useState<Partial<Trigger>>(normalizeInitial(initial));
   const [templates, setTemplates] = useState<Template[]>([]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
@@ -144,12 +149,21 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
       </Section>
 
       <Section icon={<Calendar size={14} className="text-violet-500" />} title="Schedule (Optional)" desc="Send this email at a specific date and time instead of immediately.">
-        <SchedulePicker
-          value={safeFromUTC(form.scheduled_for ?? null, form.schedule_timezone ?? "UTC")}
-          timezone={form.schedule_timezone ?? "UTC"}
-          onChangeDate={(v) => set("scheduled_for", v)}
-          onChangeTimezone={(v) => set("schedule_timezone", v)}
-        />
+        {(() => {
+          try {
+            return (
+              <SchedulePicker
+                value={safeFromUTC(form.scheduled_for ?? null, form.schedule_timezone ?? "UTC")}
+                timezone={form.schedule_timezone ?? "UTC"}
+                onChangeDate={(v) => set("scheduled_for", v)}
+                onChangeTimezone={(v) => set("schedule_timezone", v)}
+              />
+            );
+          } catch (e) {
+            console.error("[SchedulePicker] render error:", e);
+            return <p className="text-xs text-red-500">Schedule unavailable: {String(e)}</p>;
+          }
+        })()}
       </Section>
 
       <Section icon={<ShieldCheck size={14} className="text-emerald-500" />} title="Delivery Rules" desc="Control deduplication and activation.">
@@ -293,7 +307,7 @@ function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
     <div className="space-y-4">
       <label className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50/50 cursor-pointer hover:bg-gray-50 transition-colors">
         <div>
-          <p className="text-sm font-medium text-gray-800">Schedule for a specific date &amp; time</p>
+          <p className="text-sm font-medium text-gray-800">Schedule for a specific date & time</p>
           <p className="text-xs text-gray-400 mt-0.5">
             {enabled ? "Email will be queued and sent at the chosen time" : "Off — email sends immediately when the event fires"}
           </p>
