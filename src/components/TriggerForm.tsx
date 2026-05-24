@@ -280,9 +280,6 @@ const TIMEZONES = [
 ];
 
 function ScheduleSection({ form, set }: { form: Partial<Trigger>; set: (k: keyof Trigger, v: unknown) => void }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
   return (
     <Section icon={<Calendar size={14} className="text-violet-500" />} title="Schedule (Optional)" desc="Send this email at a specific date and time instead of immediately.">
       <SchedulePicker
