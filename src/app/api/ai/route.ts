@@ -5,7 +5,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const SYSTEM = `You are an expert email copywriter for SaaS products. 
 You write clear, friendly, and conversion-focused emails. 
-Always return only the requested content — no preamble, no explanation.`;
+Always return only the requested content — no preamble, no explanation, no markdown code fences.`;
 
 const prompts: Record<string, (content: string, extra?: string) => string> = {
   draft: (desc) =>
@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
     temperature: 0.7,
   });
 
-  const result = completion.choices[0].message.content ?? "";
+  const raw = completion.choices[0].message.content ?? "";
+  const result = raw.replace(/^```[\w]*\n?/m, "").replace(/\n?```$/m, "").trim();
 
   if (action === "subject_variants") {
     try {

@@ -8,6 +8,7 @@ import { Trigger } from "@/types";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
+  try {
   const body = await req.json();
   const { event_name, user_id, payload = {} } = body;
 
@@ -22,7 +23,10 @@ export async function POST(req: NextRequest) {
     .select()
     .single();
 
-  if (eventErr) return NextResponse.json({ error: eventErr.message }, { status: 500 });
+  if (eventErr) {
+    console.error("[events] insert error:", eventErr);
+    return NextResponse.json({ step: "insert_event", error: eventErr.message, code: eventErr.code }, { status: 500 });
+  }
 
   // 2. Fetch active triggers for this event
   const { data: triggers } = await supabaseAdmin
@@ -116,4 +120,9 @@ export async function POST(req: NextRequest) {
 
   await supabaseAdmin.from("events").update({ processed: true }).eq("id", event.id);
   return NextResponse.json({ event_id: event.id, results });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[events] unhandled error:", msg);
+    return NextResponse.json({ step: "unhandled", error: msg }, { status: 500 });
+  }
 }

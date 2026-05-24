@@ -13,7 +13,10 @@ export default async function EditTriggerPage({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Edit Trigger</h1>
+      <div>
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Edit Trigger</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{trigger.name}</p>
+      </div>
       <TriggerForm initial={trigger} />
     </div>
   );
