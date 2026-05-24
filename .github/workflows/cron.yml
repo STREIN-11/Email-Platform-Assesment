@@ -1,0 +1,15 @@
+name: Process Scheduled Emails
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger cron endpoint
+        run: |
+          curl -X POST ${{ secrets.APP_URL }}/api/cron \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
