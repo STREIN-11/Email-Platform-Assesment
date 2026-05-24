@@ -5,7 +5,6 @@ import { Trigger, Template, Condition } from "@/types";
 import ConditionBuilder from "@/components/ConditionBuilder";
 import { ArrowLeft, Save, CheckCircle2, AlertCircle, Zap, SlidersHorizontal, ShieldCheck, Info, Calendar } from "lucide-react";
 
-// ─── Preset events a non-technical user can pick from ────────────────────────
 const EVENT_OPTIONS = [
   { value: "user.plan_upgraded",      label: "User upgrades their plan",           example: "When someone goes from Free → Pro" },
   { value: "user.signed_up",          label: "New user signs up",                  example: "When someone creates an account" },
@@ -24,6 +23,39 @@ const EMPTY: Partial<Trigger> = {
   scheduled_for: null, schedule_timezone: "UTC",
 };
 
+function toUTC(localDt: string, tz: string): string {
+  const [datePart, timePart] = localDt.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  const approx = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(approx).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
+  const tzLocal = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute));
+  const offset = tzLocal.getTime() - approx.getTime();
+  return new Date(approx.getTime() - offset).toISOString();
+}
+
+function safeFromUTC(utcIso: string | null, tz: string): string | null {
+  if (!utcIso) return null;
+  try {
+    const d = new Date(utcIso);
+    if (isNaN(d.getTime())) return null;
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = Object.fromEntries(
+      formatter.formatToParts(d).filter(p => p.type !== "literal").map(p => [p.type, p.value])
+    );
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}`;
+  } catch {
+    return null;
+  }
+}
+
 type Toast = { type: "success" | "error"; msg: string } | null;
 
 export default function TriggerForm({ initial }: { initial?: Trigger }) {
@@ -38,40 +70,6 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
   }, []);
 
   const set = (k: keyof Trigger, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
-
-  // Convert a datetime-local string ("YYYY-MM-DDTHH:mm") + IANA timezone → UTC ISO string
-  function toUTC(localDt: string, tz: string): string {
-    // Parse as if it's in the given timezone by formatting a known UTC date and finding the offset
-    const [datePart, timePart] = localDt.split("T");
-    const [year, month, day] = datePart.split("-").map(Number);
-    const [hour, minute] = timePart.split(":").map(Number);
-    // Use Intl to find what UTC time corresponds to this local time in the given tz
-    const approx = new Date(Date.UTC(year, month - 1, day, hour, minute));
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    });
-    const parts = Object.fromEntries(formatter.formatToParts(approx).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
-    const tzLocal = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute));
-    const offset = tzLocal.getTime() - approx.getTime();
-    return new Date(approx.getTime() - offset).toISOString();
-  }
-
-  // Convert a UTC ISO string back to "YYYY-MM-DDTHH:mm" in the given timezone (for the input value)
-  function fromUTC(utcIso: string, tz: string): string {
-    try {
-      const d = new Date(utcIso);
-      if (isNaN(d.getTime())) return utcIso.slice(0, 16);
-      const formatter = new Intl.DateTimeFormat("en-CA", {
-        timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", hour12: false,
-      });
-      const parts = Object.fromEntries(formatter.formatToParts(d).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
-      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}`;
-    } catch {
-      return utcIso.slice(0, 16);
-    }
-  }
 
   function showToast(type: "success" | "error", msg: string) {
     setToast({ type, msg });
@@ -103,7 +101,6 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
       {toast && (
         <div className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-sm font-medium border ${
           toast.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
@@ -113,7 +110,6 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
         </div>
       )}
 
-      {/* Toolbar */}
       <div className="flex items-center justify-between">
         <button onClick={() => router.push("/triggers")} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
           <ArrowLeft size={15} /> Triggers
@@ -127,15 +123,11 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
         </button>
       </div>
 
-      {/* Section: Identity */}
       <Section icon={<Zap size={14} className="text-amber-500" />} title="Trigger Identity" desc="Give this trigger a name, choose what event starts it, and pick which email to send.">
         <Field label="Trigger Name" hint="Internal label — only you see this">
           <input className={INPUT} value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Welcome to Paid" />
         </Field>
-        <EventPicker
-          value={form.event_name ?? ""}
-          onChange={(v) => set("event_name", v)}
-        />
+        <EventPicker value={form.event_name ?? ""} onChange={(v) => set("event_name", v)} />
         <Field label="Which email should be sent?">
           <select className={INPUT} value={form.template_id ?? ""} onChange={(e) => set("template_id", e.target.value)}>
             <option value="">Select a template…</option>
@@ -144,7 +136,6 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
         </Field>
       </Section>
 
-      {/* Section: Conditions */}
       <Section icon={<SlidersHorizontal size={14} className="text-indigo-500" />} title="Conditions" desc="All conditions must match for this trigger to fire.">
         <ConditionBuilder
           conditions={form.conditions ?? []}
@@ -152,17 +143,15 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
         />
       </Section>
 
-      {/* Section: Schedule */}
       <Section icon={<Calendar size={14} className="text-violet-500" />} title="Schedule (Optional)" desc="Send this email at a specific date and time instead of immediately.">
         <SchedulePicker
-          value={form.scheduled_for ? fromUTC(form.scheduled_for, form.schedule_timezone ?? "UTC") : null}
+          value={safeFromUTC(form.scheduled_for ?? null, form.schedule_timezone ?? "UTC")}
           timezone={form.schedule_timezone ?? "UTC"}
           onChangeDate={(v) => set("scheduled_for", v)}
           onChangeTimezone={(v) => set("schedule_timezone", v)}
         />
       </Section>
 
-      {/* Section: Delivery rules */}
       <Section icon={<ShieldCheck size={14} className="text-emerald-500" />} title="Delivery Rules" desc="Control deduplication and activation.">
         <div className="flex flex-col gap-3">
           <Toggle
@@ -194,8 +183,6 @@ function EventPicker({ value, onChange }: { value: string; onChange: (v: string)
       <div className="flex items-baseline gap-2 mb-1.5">
         <label className="text-sm font-medium text-gray-700">When does this email fire?</label>
       </div>
-
-      {/* Preset cards */}
       <div className="grid grid-cols-1 gap-1.5">
         {EVENT_OPTIONS.map((opt) => {
           const active = isCustom ? opt.value === "__custom__" : value === opt.value;
@@ -219,8 +206,6 @@ function EventPicker({ value, onChange }: { value: string; onChange: (v: string)
           );
         })}
       </div>
-
-      {/* Custom input */}
       {(isCustom || value === "") && (
         <div className="pt-1">
           <input
@@ -233,8 +218,6 @@ function EventPicker({ value, onChange }: { value: string; onChange: (v: string)
           <p className="text-xs text-gray-400 mt-1">This must exactly match the event name your app sends.</p>
         </div>
       )}
-
-      {/* Live confirmation */}
       {value && !isCustom && selected && selected.value !== "__custom__" && (
         <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5">
           <Info size={13} className="text-indigo-400 shrink-0" />
@@ -308,14 +291,11 @@ function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
 
   return (
     <div className="space-y-4">
-      {/* Toggle */}
       <label className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50/50 cursor-pointer hover:bg-gray-50 transition-colors">
         <div>
-          <p className="text-sm font-medium text-gray-800">Schedule for a specific date & time</p>
+          <p className="text-sm font-medium text-gray-800">Schedule for a specific date &amp; time</p>
           <p className="text-xs text-gray-400 mt-0.5">
-            {enabled
-              ? "Email will be queued and sent at the chosen time"
-              : "Off — email sends immediately when the event fires"}
+            {enabled ? "Email will be queued and sent at the chosen time" : "Off — email sends immediately when the event fires"}
           </p>
         </div>
         <div
@@ -326,7 +306,6 @@ function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
         </div>
       </label>
 
-      {/* Date/time + timezone pickers */}
       {enabled && (
         <div className="space-y-3 pl-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -353,22 +332,20 @@ function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
               </select>
             </div>
           </div>
-
-          {/* Confirmation */}
           {value && (
             <div className="flex items-start gap-2 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
               <Calendar size={14} className="text-violet-400 mt-0.5 shrink-0" />
               <p className="text-xs text-violet-700">
                 This email will be <strong>queued</strong> when the event fires, then delivered on{" "}
                 <strong>
-                  {value.slice(0, 16).replace("T", " at ").replace(/:(\d{2})$/, (_, m) => {
-                    const [h, min] = value.slice(11, 16).split(":").map(Number);
+                  {(() => {
+                    const [h, m] = value.slice(11, 16).split(":").map(Number);
                     const ampm = h >= 12 ? "PM" : "AM";
                     const h12 = h % 12 || 12;
-                    return `:${String(min).padStart(2, "0")} ${ampm}`;
-                  }).replace(/^(\d{4})-(\d{2})-(\d{2})/, (_, y, mo, d) =>
-                    new Date(+y, +mo - 1, +d).toLocaleDateString("en-US", { dateStyle: "full" })
-                  )}
+                    const [y, mo, d] = value.slice(0, 10).split("-").map(Number);
+                    const dateStr = new Date(y, mo - 1, d).toLocaleDateString("en-US", { dateStyle: "full" });
+                    return `${dateStr} at ${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+                  })()}
                 </strong>{" "}({timezone}).
               </p>
             </div>
