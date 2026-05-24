@@ -148,14 +148,7 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
         />
       </Section>
 
-      <Section icon={<Calendar size={14} className="text-violet-500" />} title="Schedule (Optional)" desc="Send this email at a specific date and time instead of immediately.">
-        <SchedulePicker
-          value={safeFromUTC(form.scheduled_for ?? null, form.schedule_timezone ?? "UTC")}
-          timezone={form.schedule_timezone ?? "UTC"}
-          onChangeDate={(v) => set("scheduled_for", v)}
-          onChangeTimezone={(v) => set("schedule_timezone", v)}
-        />
-      </Section>
+      <ScheduleSection form={form} set={set} />
 
       <Section icon={<ShieldCheck size={14} className="text-emerald-500" />} title="Delivery Rules" desc="Control deduplication and activation.">
         <div className="flex flex-col gap-3">
@@ -285,6 +278,22 @@ const TIMEZONES = [
   "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Kolkata", "Asia/Singapore",
   "Asia/Tokyo", "Australia/Sydney",
 ];
+
+function ScheduleSection({ form, set }: { form: Partial<Trigger>; set: (k: keyof Trigger, v: unknown) => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return (
+    <Section icon={<Calendar size={14} className="text-violet-500" />} title="Schedule (Optional)" desc="Send this email at a specific date and time instead of immediately.">
+      <SchedulePicker
+        value={safeFromUTC(form.scheduled_for ?? null, form.schedule_timezone ?? "UTC")}
+        timezone={form.schedule_timezone ?? "UTC"}
+        onChangeDate={(v) => set("scheduled_for", v)}
+        onChangeTimezone={(v) => set("schedule_timezone", v)}
+      />
+    </Section>
+  );
+}
 
 function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
   value: string | null;
