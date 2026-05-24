@@ -149,21 +149,12 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
       </Section>
 
       <Section icon={<Calendar size={14} className="text-violet-500" />} title="Schedule (Optional)" desc="Send this email at a specific date and time instead of immediately.">
-        {(() => {
-          try {
-            return (
-              <SchedulePicker
-                value={safeFromUTC(form.scheduled_for ?? null, form.schedule_timezone ?? "UTC")}
-                timezone={form.schedule_timezone ?? "UTC"}
-                onChangeDate={(v) => set("scheduled_for", v)}
-                onChangeTimezone={(v) => set("schedule_timezone", v)}
-              />
-            );
-          } catch (e) {
-            console.error("[SchedulePicker] render error:", e);
-            return <p className="text-xs text-red-500">Schedule unavailable: {String(e)}</p>;
-          }
-        })()}
+        <SchedulePicker
+          value={safeFromUTC(form.scheduled_for ?? null, form.schedule_timezone ?? "UTC")}
+          timezone={form.schedule_timezone ?? "UTC"}
+          onChangeDate={(v) => set("scheduled_for", v)}
+          onChangeTimezone={(v) => set("schedule_timezone", v)}
+        />
       </Section>
 
       <Section icon={<ShieldCheck size={14} className="text-emerald-500" />} title="Delivery Rules" desc="Control deduplication and activation.">
@@ -305,7 +296,7 @@ function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
 
   return (
     <div className="space-y-4">
-      <label className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50/50 cursor-pointer hover:bg-gray-50 transition-colors">
+      <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50/50 cursor-pointer hover:bg-gray-50 transition-colors">
         <div>
           <p className="text-sm font-medium text-gray-800">Schedule for a specific date & time</p>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -318,7 +309,7 @@ function SchedulePicker({ value, timezone, onChangeDate, onChangeTimezone }: {
         >
           <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? "translate-x-4" : ""}`} />
         </div>
-      </label>
+      </div>
 
       {enabled && (
         <div className="space-y-3 pl-1">
