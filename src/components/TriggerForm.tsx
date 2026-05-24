@@ -59,12 +59,18 @@ export default function TriggerForm({ initial }: { initial?: Trigger }) {
 
   // Convert a UTC ISO string back to "YYYY-MM-DDTHH:mm" in the given timezone (for the input value)
   function fromUTC(utcIso: string, tz: string): string {
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    });
-    const parts = Object.fromEntries(formatter.formatToParts(new Date(utcIso)).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
-    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}`;
+    try {
+      const d = new Date(utcIso);
+      if (isNaN(d.getTime())) return utcIso.slice(0, 16);
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+      const parts = Object.fromEntries(formatter.formatToParts(d).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
+      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}`;
+    } catch {
+      return utcIso.slice(0, 16);
+    }
   }
 
   function showToast(type: "success" | "error", msg: string) {
