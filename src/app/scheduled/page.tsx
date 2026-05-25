@@ -43,6 +43,11 @@ export default function ScheduledPage() {
     setSends((prev) => prev.map((s) => s.id === id ? { ...s, status: "cancelled" } : s));
   }
 
+  async function remove(id: string) {
+    await fetch(`/api/scheduled-sends/${id}`, { method: "DELETE" });
+    setSends((prev) => prev.filter((s) => s.id !== id));
+  }
+
   useEffect(() => { load(); }, []);
 
   const pending   = sends.filter((s) => s.status === "pending");
@@ -106,7 +111,7 @@ export default function ScheduledPage() {
           </p>
           <div className="space-y-2">
             {completed.map((s) => (
-              <SendRow key={s.id} send={s} />
+              <SendRow key={s.id} send={s} onDelete={() => remove(s.id)} />
             ))}
           </div>
         </div>
@@ -133,7 +138,7 @@ export default function ScheduledPage() {
   );
 }
 
-function SendRow({ send, onCancel }: { send: ScheduledSend; onCancel?: () => void }) {
+function SendRow({ send, onCancel, onDelete }: { send: ScheduledSend; onCancel?: () => void; onDelete?: () => void }) {
   const isPending = send.status === "pending";
   const sendAt    = new Date(send.send_at);
   const isOverdue = isPending && sendAt < new Date();
@@ -167,14 +172,24 @@ function SendRow({ send, onCancel }: { send: ScheduledSend; onCancel?: () => voi
           <p className="text-xs text-red-500 mt-1">Error: {send.error}</p>
         )}
       </div>
-      {isPending && onCancel && (
-        <button
-          onClick={onCancel}
-          className="shrink-0 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-2.5 py-1.5 rounded-lg transition-colors"
-        >
-          Cancel
-        </button>
-      )}
+      <div className="flex items-center gap-1 shrink-0">
+        {isPending && onCancel && (
+          <button
+            onClick={onCancel}
+            className="text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-2.5 py-1.5 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        )}
+        {!isPending && onDelete && (
+          <button
+            onClick={onDelete}
+            className="text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-2.5 py-1.5 rounded-lg transition-colors"
+          >
+            Delete
+          </button>
+        )}
+      </div>
     </div>
   );
 }
