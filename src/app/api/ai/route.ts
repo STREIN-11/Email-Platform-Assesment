@@ -25,13 +25,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
+  if (typeof content !== "string" || content.length > 10000) {
+    return NextResponse.json({ error: "Invalid content" }, { status: 400 });
+  }
+
+  const sanitized = content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").trim();
+  const sanitizedExtra = typeof extra === "string" ? extra.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").slice(0, 100) : extra;
+
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: SYSTEM },
-      { role: "user", content: prompts[action](content, extra) },
+      { role: "user", content: prompts[action](sanitized, sanitizedExtra) },
     ],
     temperature: 0.7,
+    max_tokens: 2000,
   });
 
   const raw = completion.choices[0].message.content ?? "";

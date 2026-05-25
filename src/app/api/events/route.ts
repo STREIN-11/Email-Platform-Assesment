@@ -8,16 +8,29 @@ import { Trigger } from "@/types";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { event_name, user_id, payload = {} } = body;
+    const { event_name, user_id, payload = {}, idempotency_key } = body;
 
     if (!event_name || !user_id) {
       return NextResponse.json({ error: "event_name and user_id required" }, { status: 400 });
     }
 
+    // 0. Idempotency check — reject duplicate events
+    if (idempotency_key) {
+      const { data: existing } = await supabaseAdmin
+        .from("events")
+        .select("id")
+        .eq("idempotency_key", idempotency_key)
+        .limit(1)
+        .single();
+      if (existing) {
+        return NextResponse.json({ event_id: existing.id, deduplicated: true });
+      }
+    }
+
     // 1. Log the event
     const { data: event, error: eventErr } = await supabaseAdmin
       .from("events")
-      .insert({ event_name, user_id, payload })
+      .insert({ event_name, user_id, payload, ...(idempotency_key ? { idempotency_key } : {}) })
       .select()
       .single();
 
