@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { evaluateConditions, getFailureReason } from "@/lib/rule-engine";
 import { renderTemplate } from "@/lib/template-renderer";
-import { sendEmail } from "@/lib/mailer";
+import { sendEmail, Attachment } from "@/lib/mailer";
 import { Trigger } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { event_name, user_id, payload = {}, idempotency_key } = body;
+    const { event_name, user_id, payload = {}, idempotency_key, attachments: rawAttachments = [] } = body;
 
     if (!event_name || !user_id) {
       return NextResponse.json({ error: "event_name and user_id required" }, { status: 400 });
@@ -131,7 +131,12 @@ export async function POST(req: NextRequest) {
 
       // 8b. Send immediately
       try {
-        const messageId = await sendEmail({ to: toAddress!, subject, html });
+        const attachments: Attachment[] = rawAttachments.map((a: { filename: string; content: string; contentType: string }) => ({
+          filename: a.filename,
+          content: Buffer.from(a.content, "base64"),
+          contentType: a.contentType,
+        }));
+        const messageId = await sendEmail({ to: toAddress!, subject, html, attachments });
         await supabaseAdmin.from("send_log").insert({
           trigger_id: trigger.id, template_id: trigger.template_id,
           event_id: event.id, user_id, recipient_email: recipientEmail,

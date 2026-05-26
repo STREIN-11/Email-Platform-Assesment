@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Play, RotateCcw, CheckCircle2, XCircle, Clock, Info, ChevronDown, ChevronUp, RefreshCw, CalendarClock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Play, RotateCcw, CheckCircle2, XCircle, Clock, Info, ChevronDown, ChevronUp, RefreshCw, CalendarClock, Paperclip, X } from "lucide-react";
 
 // Default sample values for common field names
 const FIELD_DEFAULTS: Record<string, string> = {
@@ -43,6 +43,9 @@ export default function PlaygroundPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const [showRaw, setShowRaw] = useState(false);
+  const [attachments, setAttachments] = useState<{ filename: string; content: string; contentType: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadTriggers() {
     setLoadingTriggers(true);
@@ -93,6 +96,24 @@ export default function PlaygroundPage() {
   function addField() { setFields((prev) => [...prev, { key: "", value: "" }]); }
   function removeField(i: number) { setFields((prev) => prev.filter((_, idx) => idx !== i)); }
 
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (data.error) { setError(data.error); }
+    else { setAttachments((prev) => [...prev, ...data.attachments]); }
+    setUploading(false);
+    e.target.value = "";
+  }
+
+  function removeAttachment(i: number) {
+    setAttachments((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   function reset() {
     setSelectedEvent(uniqueEvents[0]?.event_name ?? "");
     setUserId("user_001");
@@ -100,6 +121,7 @@ export default function PlaygroundPage() {
       { key: "name",  value: "Jane Doe" },
       { key: "email", value: "jane@example.com" },
     ]);
+    setAttachments([]);
     setResult(null);
     setError("");
   }
@@ -121,7 +143,7 @@ export default function PlaygroundPage() {
       const res = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_name: eventName, user_id: userId.trim(), payload }),
+        body: JSON.stringify({ event_name: eventName, user_id: userId.trim(), payload, attachments }),
       });
       setResult(await res.json());
     } catch {
@@ -282,6 +304,44 @@ export default function PlaygroundPage() {
                   + Add a field
                 </button>
               </div>
+            </div>
+
+            {/* Attachments */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Attachments (optional)</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.csv,image/*"
+                className="hidden"
+                onChange={handleFiles}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 border border-dashed border-gray-200 hover:border-indigo-300 bg-gray-50 hover:bg-indigo-50 px-4 py-2.5 rounded-xl w-full justify-center transition-colors disabled:opacity-50"
+              >
+                <Paperclip size={14} />
+                {uploading ? "Uploading…" : "Attach files (PDF, CSV, images)"}
+              </button>
+              {attachments.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {attachments.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white border border-gray-100 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Paperclip size={12} className="text-gray-400 shrink-0" />
+                        <span className="text-xs text-gray-700 truncate">{a.filename}</span>
+                        <span className="text-xs text-gray-400 shrink-0">{a.contentType.split("/")[1].toUpperCase()}</span>
+                      </div>
+                      <button onClick={() => removeAttachment(i)} className="text-gray-300 hover:text-red-400 transition-colors shrink-0 ml-2">
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {error && (
