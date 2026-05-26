@@ -20,8 +20,8 @@ type TriggerOption = {
   template: string;     // template name
 };
 
-type ResultRow = { trigger: string; status: string; reason?: string; send_at?: string };
-type EngineResult = { event_id: string; results: ResultRow[]; matched?: number } | null;
+type ResultRow = { trigger: string; status: string; reason?: string; send_at?: string; email?: string };
+type EngineResult = { event_id: string; results: ResultRow[] | { user_id: string; results: ResultRow[] }[]; matched?: number } | null;
 
 const REASON_LABELS: Record<string, string> = {
   already_sent: "Already sent to this user before",
@@ -134,8 +134,11 @@ export default function PlaygroundPage() {
     if (!userId.trim()) { setError("Please enter a User ID."); return; }
 
     const payload: Record<string, string> = {};
+    const emails: string[] = [];
     for (const f of fields) {
-      if (f.key.trim()) payload[f.key.trim()] = f.value;
+      if (!f.key.trim()) continue;
+      if (f.key.trim() === "email") emails.push(f.value);
+      else payload[f.key.trim()] = f.value;
     }
 
     setLoading(true);
@@ -143,7 +146,7 @@ export default function PlaygroundPage() {
       const res = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_name: eventName, user_id: userId.trim(), payload, attachments }),
+        body: JSON.stringify({ event_name: eventName, user_id: userId.trim(), payload, attachments, ...(emails.length ? { emails } : {}) }),
       });
       setResult(await res.json());
     } catch {
@@ -383,17 +386,25 @@ export default function PlaygroundPage() {
                     You simulated: <strong className="text-gray-900">{selectedLabel}</strong>
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {(result.results?.length ?? 0) === 0
-                      ? result.matched === 0
-                        ? "No active triggers found for this event name."
-                        : "All triggers were skipped."
-                      : `${result.results?.length} trigger${result.results?.length !== 1 ? "s" : ""} were checked.`}
+                    {(() => {
+                      const flat = Array.isArray(result.results) && result.results.length > 0 && "user_id" in result.results[0]
+                        ? (result.results as { user_id: string; results: ResultRow[] }[]).flatMap((r) => r.results)
+                        : result.results as ResultRow[];
+                      return flat.length === 0
+                        ? result.matched === 0
+                          ? "No active triggers found for this event name."
+                          : "All triggers were skipped."
+                        : `${flat.length} trigger${flat.length !== 1 ? "s" : ""} were checked.`;
+                    })()}
                   </p>
                 </div>
 
                 {(result.results?.length ?? 0) > 0 && (
                   <div className="space-y-2">
-                    {result.results.map((r, i) => (
+                    {(Array.isArray(result.results) && result.results.length > 0 && "user_id" in result.results[0]
+                      ? (result.results as { user_id: string; results: ResultRow[] }[]).flatMap((r) => r.results)
+                      : result.results as ResultRow[]
+                    ).map((r, i) => (
                       <div key={i} className={`rounded-xl border p-4 ${
                         r.status === "sent"      ? "bg-emerald-50 border-emerald-100" :
                         r.status === "scheduled" ? "bg-violet-50 border-violet-100" :
